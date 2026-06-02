@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Network Extensions capability: lets the app manage a packet-tunnel VPN (NETunnelProviderManager).
+       Available to a standard paid Apple Developer account; NO MDM/supervision. -->
+  <key>com.apple.developer.networking.networkextension</key>
+  <array>
+    <string>packet-tunnel-provider</string>
+  </array>
+  <!-- Shared container: the app writes the enrollment-fed number set + tier; the extensions read it. -->
+  <key>com.apple.security.application-groups</key>
+  <array>
+    <string>group.com.kolbo.shomer</string>
+  </array>
+</dict>
+</plist>

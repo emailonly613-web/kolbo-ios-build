@@ -1,0 +1,68 @@
+# XcodeGen project — KolBo iOS Tier-1 downloadable filtering app (app + 3 extensions).
+# Authored on Windows; generated + built on a Mac:  xcodegen generate && open KolboShomer.xcodeproj
+# Spec: ../IOS_DOWNLOADABLE_APP_BUILD_SPEC.md   ·   Re-checked by policy-server/scripts/check-ios-downloadable-spec.mjs
+name: KolboShomer
+options:
+  bundleIdPrefix: com.kolbo.shomer
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    # The operator's Apple Developer team ID is injected on the Mac (the operator iOS gate). Not baked here.
+    DEVELOPMENT_TEAM: "$(KOLBO_APPLE_TEAM_ID)"
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+
+targets:
+  # ── The main app: installs/enables the on-device VPN + the honest status UI ──────────────────
+  KolboShomer:
+    type: application
+    platform: iOS
+    sources: [App, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kolbo.shomer
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/KolboShomer.entitlements
+    dependencies:
+      - target: PacketTunnel
+      - target: MessageFilter
+      - target: CallDirectory
+
+  # ── NEPacketTunnelProvider: web/DNS filtering, routes to KolBo's resolver (DoH) ───────────────
+  PacketTunnel:
+    type: app-extension
+    platform: iOS
+    sources: [PacketTunnel, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kolbo.shomer.tunnel
+        INFOPLIST_FILE: PacketTunnel/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PacketTunnel/PacketTunnel.entitlements
+
+  # ── ILMessageFilterExtension: unknown-sender SMS/MMS content filtering ────────────────────────
+  MessageFilter:
+    type: app-extension
+    platform: iOS
+    sources: [MessageFilter, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kolbo.shomer.messagefilter
+        INFOPLIST_FILE: MessageFilter/Info.plist
+        CODE_SIGN_ENTITLEMENTS: MessageFilter/MessageFilter.entitlements
+
+  # ── CXCallDirectoryProvider: block/label incoming calls by number ─────────────────────────────
+  CallDirectory:
+    type: app-extension
+    platform: iOS
+    sources: [CallDirectory, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kolbo.shomer.calldirectory
+        INFOPLIST_FILE: CallDirectory/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CallDirectory/CallDirectory.entitlements

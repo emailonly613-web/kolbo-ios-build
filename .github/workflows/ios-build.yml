@@ -1,0 +1,74 @@
+# DISPATCH-512 GATE-1 — build the KolBo iOS .ipa on a FREE GitHub Actions macOS runner (no paid Mac).
+# Public repo = unlimited free macOS minutes. This repo holds ONLY the iOS app (public client, no secret, `.s`).
+#
+# Two modes (auto-selected by whether the signing secrets are present):
+#   • WITHOUT secrets → COMPILE-CHECK (unsigned): proves the app builds on macOS — green BEFORE the operator's cert.
+#   • WITH    secrets → ARCHIVE + EXPORT a SIGNED .ipa artifact (the operator's one pass adds the 3 secrets).
+# Signing follows Apple's documented "install an Apple certificate on macOS runners" flow: import the .p12 +
+# provisioning profile (from encrypted Actions SECRETS) into a TEMP keychain — never in the repo (`.s`).
+name: Build iOS .ipa
+on:
+  push: { branches: ["**"] }
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:
+      CERT_P12_B64: ${{ secrets.IOS_SIGNING_CERT_P12 }}
+      CERT_PASSWORD: ${{ secrets.IOS_SIGNING_CERT_PASSWORD }}
+      PROFILE_B64: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the latest Xcode (match xcodegen's project format)
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the Xcode project
+        run: xcodegen generate
+
+      - name: Import signing assets into a temp keychain (only if secrets are set)
+        if: ${{ env.CERT_P12_B64 != '' }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "" "$KC"
+          echo "$CERT_P12_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed s/\"//g)
+          security set-key-partition-list -S apple-tool:,apple: -k "" "$KC" >/dev/null
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$PROFILE_B64" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/kolbo.mobileprovision"
+
+      - name: Compile-check (UNSIGNED) — proves the app builds before the cert lands
+        if: ${{ env.CERT_P12_B64 == '' }}
+        run: |
+          set -euo pipefail   # a real xcodebuild failure MUST fail the step (no xcbeautify masking)
+          ls -la
+          xcodebuild -list -project KolboShomer.xcodeproj
+          xcodebuild -project KolboShomer.xcodeproj -scheme KolboShomer -configuration Release \
+            -sdk iphoneos CODE_SIGNING_ALLOWED=NO build
+
+      - name: Archive + export the SIGNED .ipa (when secrets are set)
+        if: ${{ env.CERT_P12_B64 != '' }}
+        run: |
+          set -euo pipefail
+          xcodebuild -project KolboShomer.xcodeproj -scheme KolboShomer -configuration Release \
+            -archivePath "$RUNNER_TEMP/KolboShomer.xcarchive" archive
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/KolboShomer.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" -exportOptionsPlist ExportOptions.plist
+
+      - name: Upload the .ipa artifact
+        if: ${{ env.CERT_P12_B64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: KolboShomer-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
